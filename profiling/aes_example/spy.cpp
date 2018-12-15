@@ -37,25 +37,26 @@ char* end;
 
 int main()
 {
-  int fd = open("./libcrypto.so", O_RDONLY);
-  size_t size = lseek(fd, 0, SEEK_END);
+  int fd = open("/lib/x86_64-linux-gnu/libcrypto.so.1.0.0", O_RDONLY);
+  size_t size = lseek(fd, 0, SEEK_END);//move to file end.
   if (size == 0)
     exit(-1);
   size_t map_size = size;
-  if (map_size & 0xFFF != 0)
+  if (map_size & 0xFFF != 0)//0xFFF hava 12 "1"=4M.
   {
-    map_size |= 0xFFF;
-    map_size += 1;
-  }
-  base = (char*) mmap(0, map_size, PROT_READ, MAP_SHARED, fd, 0);
+    map_size |= 0xFFF;//keep bit "head~13".. change "12-1" to "1".
+    map_size += 1;//map_size=8M.
+  }// in this way,change map_size >=8M.
+  base = (char*) mmap(0, map_size, PROT_READ, MAP_SHARED, fd, 0);//return the maped area pointer=base.
   end = base + size;
+  printf("base= %d size=%0x end=%d \n",base,size,end);
 
   unsigned char plaintext[] =
   {
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
   };
   unsigned char ciphertext[128];
-  unsigned char restoredtext[128];
+  // unsigned char restoredtext[128];// not used
 
   AES_KEY key_struct;
 
@@ -64,35 +65,45 @@ int main()
   uint64_t min_time = rdtsc();
   srand(min_time);
   sum = 0;
-  for (size_t byte = 0; byte < 256; byte += 16)
+  for (size_t byte = 0; byte < 256; byte += 16)//16:plaintext[0] lower 4 bits->"10000".
   {
-    plaintext[0] = byte;
+    plaintext[0] = byte;//byte=16,32,48,,upper 4 bits varies->0,0x10,0x100,0x110...
     //plaintext[1] = byte;
     //plaintext[2] = byte;
     //plaintext[3] = byte;
 
     AES_encrypt(plaintext, ciphertext, &key_struct);
 
-    for (probe = base; probe < end; probe += 64)
+    for (probe = base; probe < end; probe += 64)//in aes,every block is 64 bits..block ^ key.
     {
       size_t count = 0;
-      sched_yield();
+      int first_ret = sched_yield();
+      if(first_ret == -1){
+        printf("first sched_yield() failed\n");
+      }
       for (size_t i = 0; i < NUMBER_OF_ENCRYPTIONS; ++i)
       {
-        for (size_t j = 0; j < 16; ++j)
-          plaintext[j] = rand() % 256;
+        for (size_t j = 0; j < 16; ++j){//plaintext has 16 element.
+          plaintext[j] = rand() % 256;//plaintext:0~255.becasue plaintext has 8 bits.
+        }
         flush(probe);
-        plaintext[0] |= 0xF;
+        plaintext[0] |= 0xF;//reverse uppper 4 bits..change lower 4 bits->"1111".
         AES_encrypt(plaintext, ciphertext, &key_struct);
         size_t time = rdtsc();
-        maccess(probe);
+        maccess(probe);//mov *probe ,rax
         size_t delta = rdtsc() - time;
         if (delta < MIN_CACHE_MISS_CYCLES)
           ++count;
       }
-      sched_yield();
+      int second_ret = sched_yield();
+      if(second_ret == -1){
+        printf("second sched_yield() failed\n");
+      }
       timings[probe][byte] = count;
-      sched_yield();
+      int third_ret = sched_yield();
+      if(third_ret == -1){
+        printf("third sched_yield() failed\n");
+      }
     }
   }
 
