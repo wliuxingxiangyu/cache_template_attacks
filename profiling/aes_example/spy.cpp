@@ -11,10 +11,10 @@
 #include <vector>
 
 // this number varies on different systems
-#define MIN_CACHE_MISS_CYCLES (155)
+#define MIN_CACHE_MISS_CYCLES (210)//calibration make and run
 
 // more encryptions show features more clearly
-#define NUMBER_OF_ENCRYPTIONS (10000)
+#define NUMBER_OF_ENCRYPTIONS (100)
 
 unsigned char key[] =
 {
@@ -49,7 +49,7 @@ int main()
   }// in this way,change map_size >=8M.
   base = (char*) mmap(0, map_size, PROT_READ, MAP_SHARED, fd, 0);//return the maped area pointer=base.
   end = base + size;
-  printf("base= %d size=%0x end=%d \n",base,size,end);
+  printf("base= %d size=0x%0x end=%d \n",base,size,end);
 
   unsigned char plaintext[] =
   {
@@ -107,13 +107,22 @@ int main()
     }
   }
 
-  for (auto ait : timings)
-  {
+  int addr_val_in_map,count_val_in_map;
+  for (auto ait : timings){
     printf("%p", (void*) (ait.first - base));
-    for (auto kit : ait.second)
-    {
-      printf(",%lu", kit.second);
+    for (auto kit : ait.second){
+      count_val_in_map=kit.second;
+
+      if(count_val_in_map != 0){
+          addr_val_in_map=*(ait.first - base);
+          printf(",found count= %lu, addr_val=0x%0x",
+            count_val_in_map,addr_val_in_map);
+      }else{
+        printf(",%lu", count_val_in_map);
+      }
+      
     }
+    
     printf("\n");
   }
 
